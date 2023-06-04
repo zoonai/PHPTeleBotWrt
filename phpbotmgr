@@ -1,0 +1,350 @@
+#!/bin/bash
+# PHPTeleBotWrt Manager (Installer, Updater, Uninstaller)
+#--------------------------------------------------------
+# Script by Helmi Amirudin <helmiau.com>
+# If you use some codes frome here, please give credit to www.helmiau.com
+#--------------------------------------------------------
+SCNM="$(basename "$0")"
+INSDIR="/root/PHPTeleBotWrt" # Install directory
+TLNAME="PHPTeleBotWrt"
+logF="PHPTeleBotWrt-CurlBotLog"
+
+oIns="opkg install"
+InsTxt="Installing"
+ExBotToken="Bot Token Example: 52123745:ABeN1H9jc0I_7lIeyu_4aE8BZiV_fXt9TGk"
+ExBotUser="Bot Username Example: mamanxwrt_bot"
+ExUser="Personal Account UID Example: 234321234"
+
+# Funxions
+chkIPK () {
+	unset gbsPkg
+	unset p7Pkg
+	unset p8Pkg
+
+	gbsPkg=$( opkg list-installed | grep -c "^git -\|^git-http -\|^bc -\|screen -" )
+	p7Pkg=$( opkg list-installed | grep -c "^php7-cli -\|^php7-mod-curl -" )
+	p8Pkg=$( opkg list-installed | grep -c "^php8-cli -\|^php8-mod-curl -" )
+		
+	# Checking if packages installed
+	if [[ $gbsPkg -lt 4 ]] && [[ $p7Pkg -lt 2 || $p8Pkg -lt 2 ]]; then
+		echo -e "All/some required packages is not installed correctly or something wrong...."
+		echo -e "Updating package repositories for $TLNAME..."
+		opkg update
+	fi
+}
+
+insIPK () {
+	if [[ $(opkg list-installed | grep -c "^$1 -") == "0" ]]; then $oIns $1; fi
+}
+
+bootX () {
+	# Add/remove Auto start on boot command (rc.local)
+	if [[ -f "$INSDIR"/index.php ]] && ! grep -q "PHPTeleBotWrt" /etc/rc.local; then
+		sed -i 's#exit 0##g' /etc/rc.local
+		cat << 'EOF' >> /etc/rc.local
+#PHPTeleBotWrt-Start
+cd /root/PHPTeleBotWrt && if [[ $(ls {/bin,/usr/bin,/usr/sbin} | grep -c "^php8-cli") > 0 ]];then nohup php8-cli index.php &>/dev/null &;else nohup php-cli index.php &>/dev/null &; fi
+#PHPTeleBotWrt-End
+
+exit 0
+EOF
+		echo -e "$TLNAME added to startup (rc.local).."
+	else
+		sed -i -e '/PHPTeleBotWrt-Start/,+3d' /etc/rc.local
+		echo -e "$TLNAME removed from startup (rc.local).."
+	fi
+}
+
+cronX () {
+	# Add/remove bot to Scheduled Tasks (cron) command
+	if [[ -f "$INSDIR"/index.php ]] && ! grep -q "PHPTeleBotWrt" /etc/crontabs/root; then
+		sed -i 's#exit 0##g' /etc/crontabs/root
+		cat << 'EOF' >> /etc/crontabs/root
+#PHPTeleBotWrt-Start
+*/4 * * * * cd /root/PHPTeleBotWrt && if [[ $(ls {/bin,/usr/bin,/usr/sbin} | grep -c "^php8-cli") > 0 ]];then php8-cli index.php;else php-cli index.php; fi
+EOF
+		echo -e "$TLNAME added to Scheduled Tasks (cron).."
+	else
+		sed -i -e '/PHPTeleBotWrt-Start/,+1d' /etc/crontabs/root
+		echo -e "$TLNAME removed from Scheduled Tasks (cron).."
+	fi
+}
+
+msgBotTest () {
+	botTknTst=$(sed -n '1p' "$INSDIR"/databot)
+	botUsrTst=$(sed -n '2p' "$INSDIR"/databot)
+	AccUID=$(sed -n '3p' "$INSDIR"/databot)
+	curl -s -X POST "https://api.telegram.org/bot$botTknTst/sendMessage" -d chat_id="$AccUID" -d text="$1" > "$logF"
+	if grep -q "error_code" "$logF"; then
+		echo "But error occurs when sending message to bot:"
+		cat "$logF"
+		rm -f "$logF"
+	else
+		rm -f "$logF"
+	fi
+}
+
+# Installer commands
+if [[ $1 == "i" ]]; then
+	# Check package and install requirements
+	# [ -f /var/lock/opkg.lock ] && rm -f /var/lock/opkg.lock
+	
+	# Checking if packages installed
+	chkIPK
+
+	# Try install git, git-http, bc, screen is not installed
+	if [[ $gbsPkg -lt 4 ]]; then
+		echo -e "Try to install git, git-http, bc, screen if not installed..." 
+		insIPK git
+		insIPK git-http
+		insIPK bc
+		insIPK screen
+	else
+		echo -e "Package: git, git-http, bc, screen already installed." 
+	fi
+
+	# Try install PHP if php8/php7 is not installed
+	if [[ $(ls {/bin,/usr/bin,/usr/sbin} | grep -c "^php8-cli\|^php7-cli") -lt 1 ]] && [[ $(ls /usr/lib/php* | grep -c "^curl.so") -lt 1 ]]; then
+		# install php7 if php8 is not available on the repo
+		if [[ $(opkg list | grep -c "^php8-cli -") == 0 ]];then
+			# Try install php7
+			echo -e "Try to install php7 deps..." 
+			insIPK php7-cli
+			insIPK php7-mod-curl
+		else
+			# Try install php8
+			echo -e "Try to install php8 deps..."
+			insIPK php8-cli
+			insIPK php8-mod-curl
+		fi
+	else
+		echo -e "Package: PHP packages already installed." 
+	fi
+	
+	# Rechecking all required packages
+	chkIPK
+
+	# Remove older version if available
+	if [[ -d "$INSDIR" ]]; then
+		echo -e "Old files of $TLNAME detected! removing..."
+		[ -e "$INSDIR"/databot ] && mv "$INSDIR"/databot "$INSDIR"-databot.bak
+		rm -rf "$INSDIR"
+	fi
+
+	# Cloning repo
+	echo -e "Downloading $TLNAME files..."
+	git clone https://github.com/helmiau/PHPTeleBotWrt "$INSDIR"
+	
+	if [ $? -eq 0 ]; then
+		echo -e "$TLNAME downloaded successfully."
+	else
+		echo -e "Error downloading $TLNAME binaries, exiting manager..."
+		exit 1
+	fi
+
+	# Setting up permissions
+	echo -e "Setting up $TLNAME file permissions..."
+	chmod 0755 -R "$INSDIR"/*
+	
+	# Auto start on boot command (rc.local)
+	bootX
+
+	# Add bot to Scheduled Tasks (cron) command
+	cronX
+
+	# Restore databot backup if available
+	if [[ -e "$INSDIR"-databot.bak ]]; then
+		echo -e "Backup found! Restoring $TLNAME databot backup..."
+		mv "$INSDIR"-databot.bak "$INSDIR"/databot
+	else
+		echo -e "$ExBotToken"
+		echo -e "💬 Enter Your Bot Token: "
+		echo -n "==>> "
+		read -r btoken
+		echo -e "$ExBotUser"
+		echo -e "🤖 Enter Your Bot Username (without @): "
+		echo -n "==>> "
+		read -r buser
+		echo -e "$ExUser"
+		echo -e "🤖 Enter Your Personal Account UID: "
+		echo -n "==>> "
+		read -r userid
+
+		echo -e "\n🔨 Setting up $TLNAME telegram data with your Bot Token & Bot Username..."
+		echo -e "$btoken" > "$INSDIR"/databot
+		echo -e "$buser" >> "$INSDIR"/databot
+		echo -e "$userid" >> "$INSDIR"/databot
+	fi
+
+	# Success notif
+	successTxt="✔️ $TLNAME installed successfully! Wait for 5 mins until this software run automatically!."
+	echo -e "$successTxt"
+
+	# Send message to Bot for testing
+	msgBotTest "$successTxt"
+
+
+# Update command
+elif [[ $1 == "u" ]]; then
+	# Update CMD
+	echo -e "Updating $TLNAME..."
+	
+	# Backup databot if available
+	[ -e "$INSDIR"/databot ] && echo -e "$TLNAME databot detected! backing up..." && mv "$INSDIR"/databot "$INSDIR"-databot.bak
+
+	cd "$INSDIR"
+	git reset --hard
+	git pull
+	chmod 0755 -R "$INSDIR"/*
+
+	# Restore databot if available
+	[ -e "$INSDIR"-databot.bak ] && echo -e "Backup found! Restoring $TLNAME databot backup..." && mv "$INSDIR"-databot.bak "$INSDIR"/databot
+	
+	echo -e "cp -f /root/PHPTeleBotWrt/phpbotmgr /root/phpbotmgr && chmod 0755 /root/phpbotmgr" > /tmp/phpbotmgr_updater
+	chmod 0755 /tmp/phpbotmgr_updater
+	sh /tmp/phpbotmgr_updater
+	rm -f /tmp/phpbotmgr_updater
+
+# Remover/Uninstaller command
+elif [[ $1 == "ra" ]] || [[ $1 == "rx" ]]; then
+	if [[ -d "$INSDIR" ]] && [[ $1 == "ra" ]]; then
+		echo -e "Uninstalling $TLNAME with all data..."
+		rm -rf "$INSDIR"
+		echo -e "$TLNAME uninstalled..."
+	elif [[ -d "$INSDIR" ]] && [[ $1 == "rx" ]]; then
+		echo -e "Uninstalling $TLNAME without data..."
+		[ -e "$INSDIR"/databot ] && mv "$INSDIR"/databot "$INSDIR"-databot.bak
+		rm -rf "$INSDIR"
+		echo -e "$TLNAME uninstalled..."
+	fi
+	
+	bootX
+	cronX
+
+# Edit databot command
+elif [[ $1 == "e" ]]; then
+	# Get older databot
+	botTknTst=$(sed -n '1p' "$INSDIR"/databot)
+	botUsrTst=$(sed -n '2p' "$INSDIR"/databot)
+	AccUID=$(sed -n '3p' "$INSDIR"/databot)
+	
+	# Edit databot CMD
+	echo -e "Editing $TLNAME databot..."
+	echo -e "$ExBotToken"
+	echo -e "💬 Enter New Bot Token: (leave empty if no change)"
+	echo -n "==>> "
+	read -r newbtoken
+	[[ ! -z $newbtoken ]] && sed -i "s#$botTknTst#$newbtoken#g" "$INSDIR"/databot
+	echo -e "$ExBotUser"
+	echo -e "🤖 Enter New Bot Username (without @): (leave empty if no change)"
+	echo -n "==>> "
+	read -r newbuser
+	[[ ! -z $newbuser ]] && sed -i "s#$botUsrTst#$newbuser#g" "$INSDIR"/databot
+	echo -e "$ExUser"
+	echo -e "🤖 Enter Your New Personal Account UID: (leave empty if no change)"
+	echo -n "==>> "
+	read -r newuserid
+	[[ ! -z $newuserid ]] && sed -i "s#$AccUID#$newuserid#g" "$INSDIR"/databot
+
+	# Success notif
+	successTxt="✔️ $TLNAME telegram data updated successfully."
+	echo -e "$successTxt"
+	
+	# Get new databot
+	unset botTknTst
+	unset botUsrTst
+	unset AccUID
+	msgBotTest "$successTxt"
+
+# Runner/starter command
+elif [[ $1 == "r" ]]; then
+	# Run screen
+	if [[ $(opkg list-installed | grep -c "^screen -") -gt 0 ]];then
+		echo -e "Starting screen..."
+		screen -S bot &>/dev/null &
+	else
+		echo -e "Pkg: screen is not available, exiting..."
+		exit 1
+	fi
+	
+	# Run php
+	if [[ $(ls {/bin,/usr/bin,/usr/sbin} | grep -c "^php8-cli") -gt 0 ]];then
+		echo -e "Starting $TLNAME with php8-cli."
+		cd "$INSDIR" && nohup php8-cli index.php &>/dev/null &
+	else
+		echo -e "Starting $TLNAME with php7-cli."
+		cd "$INSDIR" && nohup php-cli index.php &>/dev/null &
+	fi
+	
+	echo -e "✔️ $TLNAME started successfully."
+	echo -e "Run [jobs] command to see $TLNAME process."
+
+# Check status command
+elif [[ $1 == "c" ]]; then
+	# https://linuxconfig.org/how-to-kill-a-running-process-on-linux
+	if [[ $(ps -a | grep "php-cli\|php8-cli") -gt 0 ]]; then
+		echo -e "✔️ $TLNAME is running with detail:"
+		jobs -p
+		# ps -a | grep "php-cli\|php8-cli"
+	else
+		echo -e "✔️ $TLNAME is not running."
+		exit 0
+	fi
+
+# Stopper command
+elif [[ $1 == "s" ]]; then
+	# Stop CMD
+	
+	# https://unix.stackexchange.com/questions/383497/how-to-kill-all-jobs-in-bash/383542#383542
+	# pids=( $(jobs -p) )
+	# [ -n "$pids" ] && kill -- "${pids[@]/#/-}"
+	
+	# https://linuxconfig.org/how-to-kill-a-running-process-on-linux
+	if [[ $(ps -a | grep "php-cli\|php8-cli") -gt 0 ]]; then
+		kill $(ps -a | grep "php-cli\|php8-cli")
+		echo -e "✔️ $TLNAME stopped successfully."
+		exit 0
+	else
+		echo -e "✔️ $TLNAME is not running."
+		exit 0
+	fi
+
+# Auto start on boot command (rc.local)
+elif [[ $1 == "a" ]]; then
+	bootX
+
+# Add bot to Scheduled Tasks (cron) command
+elif [[ $1 == "t" ]]; then
+	cronX
+
+# Command lists
+else
+	if grep -q "PHPTeleBotWrt" /etc/rc.local; then
+		boot_stat="ACTIVATED"
+	else
+		boot_stat="NOT ACTIVE"
+	fi
+	
+	if grep -q "PHPTeleBotWrt" /etc/crontabs/root; then
+		cron_stat="ACTIVATED"
+	else
+        cron_stat="NOT ACTIVE"
+    fi
+	
+	echo -e "$TLNAME Requirements:"
+	echo -e " 1. Make your own bot from @BotFather."
+	echo -e " 2. Copy your telegram bot token from @BotFather."
+	echo -e " 2. Copy your telegram bot username from Bot profile."
+	echo -e ""
+	echo -e "🔄 $TLNAME Manager Usage:"
+	echo -e " $SCNM i  : Install $TLNAME."
+	echo -e " $SCNM u  : Update $TLNAME."
+	echo -e " $SCNM ra : Remove/Uninstall $TLNAME with all data."
+	echo -e " $SCNM rx : Remove/Uninstall $TLNAME without data."
+	echo -e " $SCNM e  : Edit $TLNAME databot config."
+	echo -e " $SCNM r  : Run $TLNAME."
+	echo -e " $SCNM c  : Check $TLNAME running status."
+	echo -e " $SCNM s  : Stop $TLNAME."
+	echo -e " $SCNM a  : Auto Startup $TLNAME (rc.local) [$boot_stat]."
+	echo -e " $SCNM t  : $TLNAME Scheduled Tasks (cron) [$cron_stat]."
+fi
