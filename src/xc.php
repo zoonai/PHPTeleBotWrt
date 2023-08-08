@@ -199,7 +199,7 @@ function myip(){
     $timezone = $data['timezone'];
     $as = $data['as'];
     $ip = $data['query'];
-    $result = "ISP : $isp\n↳ Address : $as \n↳ IP : $ip \n↳ Region | City : $region | $city \n↳ Timezone : $timezone \n↳ Country : $country | $countryCode \n↳ PHPTeleBotWrt";
+    $result = "• ISP : $isp\n• Address : $as \n• IP : $ip \n• Region | City : $region | $city \n• Timezone : $timezone \n• Country : $country | $countryCode \n• PHPTeleBotWrt";
     return $result;
 }
 
