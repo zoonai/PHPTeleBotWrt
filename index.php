@@ -65,18 +65,18 @@ $bot->cmd("/cmdlist", function () {
 	unset($check_boot_stat);
 	Bot::sendMessage(
 		$GLOBALS["banner"] . "\n" .
-"## ZonaWRT Bot ##
+"×× ZonaWRT Bot ××
  • /botup : Update bot binaries
  • /botas : +/- Bot Auto Start on Boot [$boot_stat]
  • /botcr : +/+ Bot Cron Job [$cron_stat]
  
- ## Aria2 Commands ##
+ ×× Aria2 Commands ××
  • /aria2add : Add Task
  • /aria2stats : Aria2 Status
  • /aria2pause : Pause All
  • /aria2resume : Resume All
  
-## OpenClash Commands ##
+×× OpenClash Commands ××
  • /oc : OC Information
  • /ocst : Start/Restart Openclash
  • /ocsp : Stop Openclash
@@ -85,29 +85,29 @@ $bot->cmd("/cmdlist", function () {
  • /ocup : Update Openclash App Only
  • /ocua : Update Openclash and All Cores
 
-## MyXL Commands ##
+×× MyXL Commands ××
  • /myxl : Bandwidth Usage 
  • /setxl 087 : Set Default Number
 
-## File Manager ##
+×× File Manager ××
  • /ul : Upload a File to OpenWrt
  • /dl : +/- a File from OpenWrt
  • /cp : Copy a File to Another Folder
  • /mv : Move a File to Another Folder
  • /rm : Delete a file
 
-## System  ##
+×× System  ××
  • /sysinfo : System Information
  • /memory : Memory Status 
  • /sh [ Terminal ] : Run custom command
  • /rs ls : List of Compatible App Restart
  • /rs appname : Restart App in init.d
  
-## Power System ##
+×× Power System ××
  • /reboot : Reboot OpenWrt
  • /turnoff : Turn Off OpenWrt
  
-## Network Information ##
+×× Network Information ××
  • /netcl : Lists Client Devices
  • /fwlist : Firewall Lists
  • /ifcfg interface : List Device Interface 
