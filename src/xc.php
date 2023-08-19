@@ -1,9 +1,9 @@
 <?php
 error_reporting(E_ALL); ini_set('display_errors', 1);
 
-$oc_ip = shell_exec('uci get network.lan.ipaddr'); // '192.168.1.1';
+$oc_ip = shell_exec('uci get network.lan.ipaddr'); // '10.0.0.1';
 $oc_port = shell_exec('uci get openclash.config.cn_port'); // '9090';
-$oc_secret = shell_exec('uci get openclash.config.dashboard_password'); // '1111';
+$oc_secret = shell_exec('uci get openclash.config.dashboard_password'); // '041120';
 
 function seeURL($url){
     $ch = curl_init();
